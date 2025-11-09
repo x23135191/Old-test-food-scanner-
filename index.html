@@ -1,58 +1,125 @@
-<!doctype html>
-let lat=null, lng=null;
-try{
-const pos = await new Promise((res,rej)=>navigator.geolocation.getCurrentPosition(res, rej, {enableHighAccuracy:true,timeout:10000}));
-lat = pos.coords.latitude; lng = pos.coords.longitude;
-}catch(e){
-statusEl.textContent = 'Geolocation unavailable — you can still try but results may be less relevant.';
-}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Food Scanner Demo</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 1em;
+      background: #fafafa;
+    }
+    video, canvas {
+      width: 100%;
+      max-width: 400px;
+      border-radius: 10px;
+      margin: 10px 0;
+    }
+    button {
+      margin: 5px;
+      padding: 10px 15px;
+      font-size: 1em;
+    }
+    #map {
+      width: 100%;
+      height: 400px;
+      border-radius: 10px;
+      margin-top: 15px;
+    }
+    .result {
+      margin-top: 10px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>🍽️ AI Food Scanner (Demo)</h1>
+  <p>Allow camera and location, then tap <strong>Capture</strong>.</p>
 
+  <video id="video" autoplay playsinline></video>
+  <canvas id="canvas" style="display:none;"></canvas>
+  <br>
+  <button id="capture">Capture</button>
+  <div class="result" id="result"></div>
+  <div id="map"></div>
 
-statusEl.textContent = 'Sending to server for identification...';
-try{
-const resp = await fetch('/api/identify', {
-method: 'POST',
-headers: {'Content-Type':'application/json'},
-body: JSON.stringify({ image: dataUrl, lat, lng })
-});
-const payload = await resp.json();
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const result = document.getElementById('result');
+    const captureBtn = document.getElementById('capture');
+    const ctx = canvas.getContext('2d');
+    let lat, lng;
 
+    // --- Start Camera ---
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        video.srcObject = stream;
+      } catch (err) {
+        alert("Camera error: " + err.message);
+      }
+    }
 
-if (!resp.ok) {
-statusEl.textContent = 'Server error: ' + (payload?.error || resp.statusText);
-return;
-}
+    // --- Get Location ---
+    navigator.geolocation.getCurrentPosition(
+      pos => { lat = pos.coords.latitude; lng = pos.coords.longitude; },
+      err => alert("Location error: " + err.message)
+    );
 
+    // --- Capture Photo and Identify Food (Simulated AI) ---
+    captureBtn.onclick = async () => {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-statusEl.textContent = 'Identification complete.';
-identifiedEl.innerHTML = '<strong>Detected:</strong> ' + (payload.label || 'Unknown');
+      // Simulate AI detection (replace this with real Gemini call later)
+      const foods = ["Pizza", "Burger", "Sushi", "Salad", "Pasta", "Ice Cream"];
+      const detected = foods[Math.floor(Math.random() * foods.length)];
+      result.textContent = "AI detected: " + detected + " 🍕";
 
+      // Find nearby restaurants
+      if (lat && lng) initMap(lat, lng, detected);
+      else alert("No location available.");
+    };
 
-// render restaurant results
-if (payload.restaurants && payload.restaurants.length){
-restaurantsEl.innerHTML = '<h3>Nearby restaurants matching "' + payload.label + '"</h3>';
-payload.restaurants.forEach(r=>{
-const div = document.createElement('div');
-div.className = 'restaurant';
-div.innerHTML = `
-<strong>${r.name}</strong><br>
-${r.vicinity || r.formatted_address || ''}<br>
-Rating: ${r.rating ?? 'N/A'} &nbsp; — &nbsp;
-<a target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.name + ' ' + (r.vicinity||''))}">Open in Maps</a>
-`;
-restaurantsEl.appendChild(div);
-});
-} else {
-restaurantsEl.innerHTML = '<em>No nearby restaurants found.</em>';
-}
-}catch(err){
-statusEl.textContent = 'Network/server error: ' + err.message;
-}
-});
+    // --- Show Google Map with Nearby Restaurants ---
+    function initMap(lat, lng, keyword) {
+      const map = new google.maps.Map(document.getElementById("map"), {
+        center: { lat, lng },
+        zoom: 13,
+      });
 
+      const service = new google.maps.places.PlacesService(map);
+      const request = {
+        location: { lat, lng },
+        radius: 5000,
+        keyword: keyword,
+        type: ['restaurant']
+      };
 
-// start
-startCamera();
-</script>
+      service.nearbySearch(request, (results, status) => {
+        if (status === google.maps.places.PlacesServiceStatus.OK) {
+          results.forEach(place => {
+            new google.maps.Marker({
+              map,
+              position: place.geometry.location,
+              title: place.name
+            });
+          });
+        } else {
+          result.textContent += " — No nearby places found.";
+        }
+      });
+    }
+
+    startCamera();
+  </script>
+
+  <!-- ✅ Replace YOUR_API_KEY with your Google Maps JavaScript API key -->
+  <script async
+    src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=places">
+  </script>
 </body>
 </html>
