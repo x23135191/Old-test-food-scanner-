@@ -1,0 +1,58 @@
+<!doctype html>
+let lat=null, lng=null;
+try{
+const pos = await new Promise((res,rej)=>navigator.geolocation.getCurrentPosition(res, rej, {enableHighAccuracy:true,timeout:10000}));
+lat = pos.coords.latitude; lng = pos.coords.longitude;
+}catch(e){
+statusEl.textContent = 'Geolocation unavailable — you can still try but results may be less relevant.';
+}
+
+
+statusEl.textContent = 'Sending to server for identification...';
+try{
+const resp = await fetch('/api/identify', {
+method: 'POST',
+headers: {'Content-Type':'application/json'},
+body: JSON.stringify({ image: dataUrl, lat, lng })
+});
+const payload = await resp.json();
+
+
+if (!resp.ok) {
+statusEl.textContent = 'Server error: ' + (payload?.error || resp.statusText);
+return;
+}
+
+
+statusEl.textContent = 'Identification complete.';
+identifiedEl.innerHTML = '<strong>Detected:</strong> ' + (payload.label || 'Unknown');
+
+
+// render restaurant results
+if (payload.restaurants && payload.restaurants.length){
+restaurantsEl.innerHTML = '<h3>Nearby restaurants matching "' + payload.label + '"</h3>';
+payload.restaurants.forEach(r=>{
+const div = document.createElement('div');
+div.className = 'restaurant';
+div.innerHTML = `
+<strong>${r.name}</strong><br>
+${r.vicinity || r.formatted_address || ''}<br>
+Rating: ${r.rating ?? 'N/A'} &nbsp; — &nbsp;
+<a target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.name + ' ' + (r.vicinity||''))}">Open in Maps</a>
+`;
+restaurantsEl.appendChild(div);
+});
+} else {
+restaurantsEl.innerHTML = '<em>No nearby restaurants found.</em>';
+}
+}catch(err){
+statusEl.textContent = 'Network/server error: ' + err.message;
+}
+});
+
+
+// start
+startCamera();
+</script>
+</body>
+</html>
